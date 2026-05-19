@@ -143,7 +143,7 @@ def main():
 
         print("1")
 
-        wait = WebDriverWait(driver, 30)
+        wait = WebDriverWait(driver, 60)
 
         print("2")
 
