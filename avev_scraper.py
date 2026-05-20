@@ -10,6 +10,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.keys import Keys
 
 # Google Cloud Storage Import
 from google.cloud import storage
@@ -124,7 +125,7 @@ def main():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu") # Extra safety for cloud workers
+    chrome_options.add_argument("--disable-gpu")  # Extra safety for cloud workers
     chrome_options.add_argument("--remote-allow-origins=*")
 
     chrome_options.binary_location = "/usr/bin/chromium"
@@ -147,24 +148,39 @@ def main():
 
         print("2")
 
-        last_height = driver.execute_script("return document.body.scrollHeight")
-        for i in range(10):
-            driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(1.5)
-            
-            new_height = driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
-                print("Scrolled downn")
+        # Broadened XPath to catch the file regardless of the HTML tag SharePoint uses today
+        file_xpath = f"//*[contains(text(), '{target_file_name}')]"
+
+        file_element = None
+        max_scroll_attempts = 20  # Prevent infinite loops if the file truly isn't there
+
+        print("Searching for file in virtualized list...")
+
+        for attempt in range(max_scroll_attempts):
+            # find_elements returns a list. If it's empty, the file isn't in the DOM yet.
+            matching_elements = driver.find_elements(By.XPATH, file_xpath)
+
+            if matching_elements:
+                file_element = matching_elements[0]
+                print(f"File found in DOM after {attempt} scrolls!")
                 break
-            last_height = new_height
 
+            # If not found, simulate pressing "Page Down" on the body of the page
+            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
 
-        file_xpath = f"//button[contains(., '{target_file_name}')] | //span[contains(., '{target_file_name}')]"
-        print("3")
-        file_element = wait.until(EC.element_to_be_clickable((By.XPATH, file_xpath)))
-        print("4")
-        file_element.click()
+            # Crucial: Give SharePoint's React frontend a moment to render the new items
+            time.sleep(1.5)
 
+        if not file_element:
+            raise TimeoutException(
+                f"Scrolled {max_scroll_attempts} times, but {target_file_name} never appeared in the DOM."
+            )
+
+        # Once found, we still want to ensure it's clickable (not blocked by a loading overlay)
+        wait.until(EC.element_to_be_clickable((By.XPATH, file_xpath)))
+
+        # Sometimes standard clicks fail on dynamic elements, so executing a JS click is safer
+        driver.execute_script("arguments[0].click();", file_element)
         print("File Selected")
 
         # Click the Download Button in toolbar
