@@ -10,7 +10,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.keys import Keys
 
 # Google Cloud Storage Import
 from google.cloud import storage
@@ -142,44 +141,41 @@ def main():
         url = "https://sosia.sharepoint.com/:f:/s/ElectionsFileSharing/IgAb7hMCU-O5Q51fvBH20ujTAXz7ckSLGMBcoVy4Suxg-YA?e=cMK19p"
         driver.get(url)
 
-        print("1")
+        print("Navigated to SharePoint Link")
 
         wait = WebDriverWait(driver, 60)
 
-        print("2")
+        # --- NEW LOGIC: SORT BY MODIFIED ---
+        print("Sorting 'Modified' column to 'Newer to older'...")
+        try:
+            # 1. Wait for and click the 'Modified' column header
+            modified_header_xpath = "//*[contains(@class, 'ms-DetailsHeader-cellName') and text()='Modified'] | //span[text()='Modified'] | //button[contains(@name, 'Modified')]"
+            modified_header = wait.until(
+                EC.element_to_be_clickable((By.XPATH, modified_header_xpath))
+            )
+            driver.execute_script("arguments[0].click();", modified_header)
 
-        # Broadened XPath to catch the file regardless of the HTML tag SharePoint uses today
-        file_xpath = f"//*[contains(text(), '{target_file_name}')]"
+            # 2. Wait for the context menu to open and click 'Newer to older'
+            newer_to_older_xpath = "//span[text()='Newer to older'] | //button[contains(@name, 'Newer to older')]"
+            newer_to_older_btn = wait.until(
+                EC.element_to_be_clickable((By.XPATH, newer_to_older_xpath))
+            )
+            driver.execute_script("arguments[0].click();", newer_to_older_btn)
 
-        file_element = None
-        max_scroll_attempts = 20  # Prevent infinite loops if the file truly isn't there
+            print("Sort applied. Waiting for the list to refresh...")
+            time.sleep(3)  # Give React time to re-render the list at the top
 
-        print("Searching for file in virtualized list...")
-
-        for attempt in range(max_scroll_attempts):
-            # find_elements returns a list. If it's empty, the file isn't in the DOM yet.
-            matching_elements = driver.find_elements(By.XPATH, file_xpath)
-
-            if matching_elements:
-                file_element = matching_elements[0]
-                print(f"File found in DOM after {attempt} scrolls!")
-                break
-
-            # If not found, simulate pressing "Page Down" on the body of the page
-            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
-
-            # Crucial: Give SharePoint's React frontend a moment to render the new items
-            time.sleep(1.5)
-
-        if not file_element:
-            raise TimeoutException(
-                f"Scrolled {max_scroll_attempts} times, but {target_file_name} never appeared in the DOM."
+        except Exception as e:
+            print(
+                "Warning: Could not sort the column. The file might still be visible if the default view changed."
             )
 
-        # Once found, we still want to ensure it's clickable (not blocked by a loading overlay)
-        wait.until(EC.element_to_be_clickable((By.XPATH, file_xpath)))
+        # --- SEARCH AND SELECT ---
+        print("Selecting the file...")
+        file_xpath = f"//*[contains(text(), '{target_file_name}')]"
+        file_element = wait.until(EC.element_to_be_clickable((By.XPATH, file_xpath)))
 
-        # Sometimes standard clicks fail on dynamic elements, so executing a JS click is safer
+        # Execute JS click to bypass potential overlays
         driver.execute_script("arguments[0].click();", file_element)
         print("File Selected")
 
