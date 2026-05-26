@@ -80,6 +80,10 @@ def clean_csv_data(file_path):
     df = df.iloc[:, : len(header_list)]
     df.columns = header_list
 
+    # Drops any rows where VOTER_ID is null
+    if "VOTER_ID" in df.columns:
+        df = df.dropna(subset=["VOTER_ID"])
+
     # 6. Save cleaned version locally in /tmp
     cleaned_file_path = file_path.replace(".csv", "_cleaned.csv")
     df.to_csv(cleaned_file_path, index=False)
