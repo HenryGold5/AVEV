@@ -83,6 +83,7 @@ def clean_csv_data(file_path):
     # Drops any rows where VOTER_ID is null
     if "VOTER_ID" in df.columns:
         df = df.dropna(subset=["VOTER_ID"])
+        df["VOTER_ID"] = df["VOTER_ID"].astype(int)
 
     # 6. Save cleaned version locally in /tmp
     cleaned_file_path = file_path.replace(".csv", "_cleaned.csv")
